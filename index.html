@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Эластичный Человек с Анимациями</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            touch-action: none;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            box-shadow: 0 0 30px rgba(0,0,0,0.1);
+            transition: box-shadow 0.3s ease;
+        }
+        canvas:hover {
+            box-shadow: 0 0 50px rgba(0,0,0,0.2);
+        }
+        #reset {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 25px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        #reset:hover {
+            background: #45a049;
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        #reset:active {
+            transform: translateX(-50%) scale(0.98);
+        }
+        @keyframes stretchEffect {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .stretching {
+            animation: stretchEffect 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="game"></canvas>
+    <button id="reset">Сбросить</button>
+
+    <script>
+        // Инициализация
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const resetBtn = document.getElementById('reset');
+        
+        // Настройки
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Увеличенные размеры частей лица
+        const face = {
+            head: { 
+                x: canvas.width/2, 
+                y: canvas.height/2, 
+                r: 120, 
+                color: '#FFD700',
+                shadow: false,
+                scale: 1
+            },
+            leftEye: { 
+                x: canvas.width/2-50, 
+                y: canvas.height/2-30, 
+                r: 30, 
+                color: 'white',
+                shadow: false
+            },
+            rightEye: { 
+                x: canvas.width/2+50, 
+                y: canvas.height/2-30, 
+                r: 30, 
+                color: 'white',
+                shadow: false
+            },
+            leftPupil: { 
+                x: canvas.width/2-50, 
+                y: canvas.height/2-30, 
+                r: 12, 
+                color: '#2196F3',
+                glow: false
+            },
+            rightPupil: { 
+                x: canvas.width/2+50, 
+                y: canvas.height/2-30, 
+                r: 12, 
+                color: '#2196F3',
+                glow: false
+            },
+            nose: { 
+                x: canvas.width/2, 
+                y: canvas.height/2, 
+                r: 20, 
+                color: '#FF9800',
+                hover: false
+            },
+            mouth: { 
+                x: canvas.width/2, 
+                y: canvas.height/2+60, 
+                w: 90, 
+                h: 30, 
+                color: '#F44336',
+                stretch: 1
+            },
+            leftEar: { 
+                x: canvas.width/2-130, 
+                y: canvas.height/2, 
+                r: 35, 
+                color: '#FFD700',
+                pulse: false
+            },
+            rightEar: { 
+                x: canvas.width/2+130, 
+                y: canvas.height/2, 
+                r: 35, 
+                color: '#FFD700',
+                pulse: false
+            }
+        };
+
+
+        // Физика
+        let isDragging = false;
+        let draggedPart = null;
+        let stretchCount = 0;
+        
+        // Обработчики событий
+        canvas.addEventListener('mousedown', startDrag);
+        canvas.addEventListener('mousemove', drag);
+        canvas.addEventListener('mouseup', endDrag);
+        canvas.addEventListener('mouseleave', endDrag);
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startDrag({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            drag({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+        });
+        canvas.addEventListener('touchend', endDrag);
+        
+        resetBtn.addEventListener('click', resetPosition);
+        
+        // Функции
+        function startDrag(e) {
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            
+            for (const part in face) {
+                const p = face[part];
+                const dx = mouseX - p.x;
+                const dy = mouseY - p.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                const radius = p.r || (p.w ? p.w/2 : 20);
+                
+                if (distance < radius) {
+                    isDragging = true;
+                    draggedPart = p;
+                    
+                    // Эффект при захвате
+                    if (part === 'leftEar' || part === 'rightEar') {
+                        face[part].pulse = true;
+                        setTimeout(() => face[part].pulse = false, 500);
+                    }
+                    if (part === 'nose') face[part].hover = true;
+                    if (part === 'mouth') face.mouth.stretch = 1.2;
+                    
+                    // Анимация тени
+                    face.head.shadow = true;
+                    setTimeout(() => face.head.shadow = false, 300);
+                    
+                    break;
+                }
+            }
+        }
+        
+        function drag(e) {
+            if (!isDragging) return;
+            
+            const prevX = draggedPart.x;
+            const prevY = draggedPart.y;
+            
+            draggedPart.x = e.clientX;
+            draggedPart.y = e.clientY;
+            
+            // Эффект растяжения для рта
+            if (draggedPart === face.mouth) {
+                const dx = draggedPart.x - face.head.x;
+                const dy = draggedPart.y - face.head.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                face.mouth.stretch = 1 + distance / 200;
+                
+                if (distance > 100 && !draggedPart.glow) {
+                    draggedPart.glow = true;
+                    stretchCount++;
+                    canvas.classList.add('stretching');
+                    setTimeout(() => canvas.classList.remove('stretching'), 500);
+                }
+            }
+            
+            // Эффект для зрачков
+            if (draggedPart === face.leftEye || draggedPart === face.rightEye) {
+                const eye = draggedPart === face.leftEye ? 'left' : 'right';
+                face[`${eye}Pupil`].glow = true;
+            }
+        }
+        
+        function endDrag() {
+            if (isDragging && draggedPart) {
+                // Сброс эффектов
+                if (draggedPart === face.mouth) {
+                    face.mouth.stretch = 1;
+                }
+                if (draggedPart === face.leftEye || draggedPart === face.rightEye) {
+                    const eye = draggedPart === face.leftEye ? 'left' : 'right';
+                    setTimeout(() => face[`${eye}Pupil`].glow = false, 1000);
+                }
+                if (draggedPart === face.nose) {
+                    face.nose.hover = false;
+                }
+            }
+            
+            isDragging = false;
+            draggedPart = null;
+        }
+        
+        function resetPosition() {
+            // Анимация сброса
+
+
+            resetBtn.classList.add('stretching');
+            setTimeout(() => resetBtn.classList.remove('stretching'), 500);
+            
+            face.head.x = canvas.width/2;
+            face.head.y = canvas.height/2;
+            face.leftEye.x = canvas.width/2-50;
+            face.leftEye.y = canvas.height/2-30;
+            face.rightEye.x = canvas.width/2+50;
+            face.rightEye.y = canvas.height/2-30;
+            face.nose.x = canvas.width/2;
+            face.nose.y = canvas.height/2;
+            face.mouth.x = canvas.width/2;
+            face.mouth.y = canvas.height/2+60;
+            face.mouth.stretch = 1;
+            face.leftEar.x = canvas.width/2-130;
+            face.leftEar.y = canvas.height/2;
+            face.rightEar.x = canvas.width/2+130;
+            face.rightEar.y = canvas.height/2;
+            
+            // Сброс всех эффектов
+            Object.values(face).forEach(part => {
+                if (part.glow !== undefined) part.glow = false;
+                if (part.hover !== undefined) part.hover = false;
+                if (part.pulse !== undefined) part.pulse = false;
+            });
+        }
+        
+        function updatePhysics() {
+            if (!isDragging) {
+                // Плавное возвращение частей к голове
+                const head = face.head;
+                const parts = [face.leftEye, face.rightEye, face.nose, face.mouth, face.leftEar, face.rightEar];
+                
+                parts.forEach(part => {
+                    const dx = (head.x + (part.ox || 0)) - part.x;
+                    const dy = (head.y + (part.oy || 0)) - part.y;
+                    
+                    part.x += dx * 0.1;
+                    part.y += dy * 0.1;
+                });
+            }
+            
+            // Зрачки следят за мышью/касанием
+            const mouseX = isDragging ? draggedPart?.x || canvas.width/2 : canvas.width/2;
+            const mouseY = isDragging ? draggedPart?.y || canvas.height/2 : canvas.height/2;
+            
+            for (const eye of ['left', 'right']) {
+                const pupil = face[`${eye}Pupil`];
+                const eyeObj = face[`${eye}Eye`];
+                const dx = mouseX - eyeObj.x;
+                const dy = mouseY - eyeObj.y;
+                const angle = Math.atan2(dy, dx);
+                const maxDist = eyeObj.r - pupil.r - 2;
+                
+                pupil.x = eyeObj.x + Math.cos(angle) * maxDist;
+                pupil.y = eyeObj.y + Math.sin(angle) * maxDist;
+            }
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Тень головы
+            if (face.head.shadow) {
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 30;
+                ctx.shadowOffsetY = 10;
+            }
+            
+            // Голова с эффектом масштаба
+            ctx.save();
+            if (face.head.scale !== 1) {
+                ctx.translate(face.head.x, face.head.y);
+                ctx.scale(face.head.scale, face.head.scale);
+                ctx.translate(-face.head.x, -face.head.y);
+            }
+            
+            // Уши с пульсацией
+            for (const ear of ['leftEar', 'rightEar']) {
+                ctx.save();
+                if (face[ear].pulse) {
+                    const scale = 1 + Math.sin(Date.now() * 0.02) * 0.1;
+                    ctx.translate(face[ear].x, face[ear].y);
+                    ctx.scale(scale, scale);
+                    ctx.translate(-face[ear].x, -face[ear].y);
+                }
+                
+                ctx.fillStyle = face[ear].color;
+                ctx.beginPath();
+                ctx.arc(face[ear].x, face[ear].y, face[ear].r, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
+            
+            // Голова
+            ctx.fillStyle = face.head.color;
+            ctx.beginPath();
+            ctx.arc(face.head.x, face.head.y, face.head.r, 0, Math.PI*2);
+            ctx.fill();
+
+
+            ctx.restore();
+            
+            if (face.head.shadow) {
+                ctx.restore();
+            }
+            
+            // Глаза
+            for (const eye of ['leftEye', 'rightEye']) {
+                ctx.fillStyle = face[eye].color;
+                ctx.beginPath();
+                ctx.arc(face[eye].x, face[eye].y, face[eye].r, 0, Math.PI*2);
+                ctx.fill();
+            }
+            
+            // Зрачки с эффектом свечения
+            for (const pupil of ['leftPupil', 'rightPupil']) {
+                ctx.save();
+                if (face[pupil].glow) {
+                    ctx.shadowColor = face[pupil].color;
+                    ctx.shadowBlur = 15;
+                }
+                ctx.fillStyle = face[pupil].color;
+                ctx.beginPath();
+                ctx.arc(face[pupil].x, face[pupil].y, face[pupil].r, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
+            
+            // Нос с эффектом наведения
+            ctx.save();
+            if (face.nose.hover) {
+                ctx.shadowColor = 'rgba(0,0,0,0.2)';
+                ctx.shadowBlur = 20;
+                ctx.shadowOffsetY = 5;
+            }
+            ctx.fillStyle = face.nose.color;
+            ctx.beginPath();
+            ctx.arc(face.nose.x, face.nose.y, face.nose.r, 0, Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+            
+            // Рот с эффектом растяжения
+            ctx.save();
+            ctx.translate(face.mouth.x, face.mouth.y);
+            ctx.scale(face.mouth.stretch, 1);
+            ctx.translate(-face.mouth.x, -face.mouth.y);
+            
+            ctx.fillStyle = face.mouth.color;
+            ctx.beginPath();
+            ctx.ellipse(
+                face.mouth.x, 
+                face.mouth.y, 
+                face.mouth.w/2, 
+                face.mouth.h/2, 
+                0, 0, Math.PI
+            );
+            ctx.fill();
+            ctx.restore();
+            
+            // Счетчик растяжений
+            ctx.fillStyle = '#333';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Растяжений: ${stretchCount}`, canvas.width/2, 40);
+        }
+        
+        function gameLoop() {
+            updatePhysics();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Задаем исходные смещения
+        face.leftEye.ox = -50;
+        face.leftEye.oy = -30;
+        face.rightEye.ox = 50;
+        face.rightEye.oy = -30;
+        face.nose.ox = 0;
+        face.nose.oy = 0;
+        face.mouth.ox = 0;
+        face.mouth.oy = 60;
+        face.leftEar.ox = -130;
+        face.leftEar.oy = 0;
+        face.rightEar.ox = 130;
+        face.rightEar.oy = 0;
+        
+        // Плавное появление
+        face.head.scale = 0.5;
+        let scaleInterval = setInterval(() => {
+            face.head.scale += 0.05;
+            if (face.head.scale >= 1) {
+                clearInterval(scaleInterval);
+                face.head.scale = 1;
+            }
+        }, 30);
+        
+        gameLoop();
+        
+        // Ресайз
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            resetPosition();
+        });
+    </script>
+</body>
+</html>
